@@ -1,0 +1,4 @@
+{
+ "_note": "Copy to settings.local.json (not shared). lang = the spoken language for whisper (en, es, pt...).",
+ "lang": "en"
+}

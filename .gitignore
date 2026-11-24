@@ -1,0 +1,10 @@
+local.md
+settings.local.json
+examples/
+__pycache__/
+*.pyc
+.DS_Store
+template/node_modules/
+template/out/
+template/public/media
+template/public/sfx/*.wav
