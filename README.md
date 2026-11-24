@@ -13,7 +13,7 @@ It does not add captions, big animated text or transitions.
 ## Install
 
 ```bash
-git clone https://github.com/<you>/reel-cutter ~/.claude/skills/reel-cutter
+git clone https://github.com/dominique-mainhard/reel-cutter ~/.claude/skills/reel-cutter
 ~/.claude/skills/reel-cutter/scripts/doctor.sh
 ```
 
