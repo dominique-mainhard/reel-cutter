@@ -105,6 +105,12 @@ In/out times are **source seconds**. `sources` are **absolute paths to files ins
 - **Handles:** in ~0.08 s before speech; **out = where the last consonant really ends** (the level falls to the clip's noise floor + 4 dB for 60 ms, measured on the envelope) **+ 40 ms**. A fixed +0.12 s after silencedetect's end clips final consonants (s, t, d, r). Don't add more than that: extra tails read as dead air. **Words ending in "s" fade slowly**: whisper/silencedetect put the end too early and the cut swallows the s. Check the envelope after each out on those words and extend to where it falls under ~−55 dB (often +0.1–0.2 s). Only there: extending every cut brings back the dead air. Handles stay inside silence, never in a neighbouring take.
 - **Self-corrections inside a sentence:** keep the last version. Cut in a stop-consonant gap (k/p/t) or a breath, found with `python3 -I <skill>/scripts/envelope.py <wav> <from> <to>`; dips below about −48 dB are safe. Words that glide together can't be split there: end the clip mid-glide and take the next word from the corrected take.
 
+### 4b. Remove pauses and breaths INSIDE the takes
+```bash
+python3 -I <skill>/scripts/tighten.py <spec.json> <workdir> [--keep-last-end]
+```
+Step 4 only trims between lines; the pauses (0.3–0.6 s) and breaths inside each take stay, and they make the reel feel slow. `tighten.py` splits every cut at internal gaps ≥ 0.25 s (level under min(floor+22, −40 dB), which catches breaths) and keeps a consonant-safe tail (level under floor+8 for 60 ms, +40 ms) and an 80 ms pre-roll. Run it after the jump-zoom split: each piece keeps its cut's `zoom` and `center`. Cuts with `zoomTo` or `"noTighten": true` are left alone; `--keep-last-end` keeps the silence after the last line. Then step 5, always: no word may be lost. `normalize_cuts.py` gives the pieces of one take a single gain, so the level doesn't jump between them.
+
 ### 5. Verify the joins by ear
 ```bash
 python3 -I <skill>/scripts/check_joins.py <spec.json> <workdir>
@@ -151,7 +157,7 @@ cd <project>
 python3 -I scripts/from_spec.py <spec.json> <slug>                    # cuts -> src/data/<slug>.json (+ index.ts)
 # edit src/data/<slug>.json: layers (see "Data reference")
 python3 -I scripts/cutouts.py <slug> [--force]                        # plate + speaker cutouts behind every layer window
-python3 -I scripts/normalize_cuts.py src/data/<slug>.json            # per-cut gain to −20 LUFS
+python3 -I scripts/normalize_cuts.py src/data/<slug>.json            # one gain per take, to −20 LUFS
 python3 -I scripts/proxies.py <slug>                                  # WebM copies so Studio can play HEVC/ProRes
 npx remotion studio --port=3123                                       # live preview: http://localhost:3123/<slug>
 ```

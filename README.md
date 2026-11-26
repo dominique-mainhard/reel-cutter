@@ -3,7 +3,7 @@
 A [Claude Code](https://claude.com/claude-code) skill that cuts raw talking-head phone clips into a clean vertical reel (1080×1920) with [Remotion](https://www.remotion.dev):
 
 - keeps the **last take** of every line and drops false starts and self-corrections
-- removes **silences**, with handles that don't clip final consonants, and checks every join by ear
+- removes **silences** between lines and the **pauses and breaths inside each take**, with handles that don't clip final consonants, and checks every join by ear
 - adds **punch-in zooms** at changes of idea (sparingly), plus an instant **jump zoom** (~+10%, then back) on the key line
 - finds **real images and screenshots** for what the speaker mentions (their own captures, official logos and product pages, highlighted captures of cited articles) and places them as a collage behind the speaker's head, each with a **click** sound
 - evens out the audio cut by cut and masters it to −16 LUFS
