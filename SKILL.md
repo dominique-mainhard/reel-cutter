@@ -80,8 +80,10 @@ Propose the zooms with it (columns `time | line | zoom | why`):
   - Consecutive short cuts within one idea keep the **same** framing.
   - **At most one change every ~6–8 s.** Never ping-pong in/out on every cut: changing on almost every cut is dizzying.
   - Check framing on contact sheets (`ffmpeg … -vf scale=180:-1` per cut, then `tile=6x2`). If the face is near an edge, don't zoom.
-- **One slow push-in on the line that matters most (optional).** A slow, eased **pure scale-up** of +6–8% over ~2–4 s *within* the cut (`zoomTo`, `zoomFrames`), anchored on the face (`center`). It must **never move the frame** (a pan while scaling looks like a handheld camera). Usually ONE per reel. After it, **hold** that framing on the next cuts (same `zoomTo` and `center`, `zoomFrames: 0`); never zoom back out right away.
-- **Emphasis punch** for a line that contradicts or stresses what came before ("…and **no**, that's not how it works"): a fast scale-up landing on that word (`zoomTo` ≈ +12% over ~8 frames, `"zoomEase": "out"`). Hold the tighter framing until the next idea, then go back with a plain cut at a pause.
+- **Emphasis zoom = an instant JUMP, then back.** On the line that matters most, or one that contradicts or stresses what came before ("…and **no**, that's not how it works"), the framing jumps from the base to ~+10% with **no scaling animation**, and at the next cut it goes **back to the base**. Never leave the reel zoomed in.
+  - Build it by splitting the cut at the dip just before the key word (`envelope.py`; `out` of the first piece = `in` of the second, so the audio stays continuous) and giving the second piece `zoom × 1.10` with no `zoomTo`. The next cut returns to the base `zoom`.
+  - Same `center` on both pieces (never a pan). Usually one per reel.
+  - A slow eased push-in (`zoomTo`/`zoomFrames`) and a fast animated punch (`"zoomEase": "out"`) still exist in the code, but they're not the default: a zoom that grows little by little reads as slow and forced. Use them only if the user asks.
 - Cuts between clips are always plain cuts (no transitions).
 
 ### 4. Place the cuts precisely: `spec.json`
@@ -93,12 +95,13 @@ In/out times are **source seconds**. `sources` are **absolute paths to files ins
   "sources": {"A": "/path/to/my-reel/IMG_0001.MOV", "B": "/path/to/my-reel/IMG_0002.MOV"},
   "cuts": [
     {"src": "B", "in": 1.92, "out": 4.40, "zoom": 1.3, "center": [0.5, 0.42], "label": "1 hook"},
-    {"src": "B", "in": 6.10, "out": 9.85, "zoom": 1.3, "center": [0.5, 0.42], "zoomTo": 1.39, "zoomFrames": 90, "label": "2 key line, push-in"},
+    {"src": "B", "in": 6.10, "out": 8.02, "zoom": 1.3, "center": [0.5, 0.42], "label": "2 lead-in"},
+    {"src": "B", "in": 8.02, "out": 9.85, "zoom": 1.43, "center": [0.5, 0.42], "label": "2 key words: jump zoom +10%"},
     {"src": "A", "in": 12.04, "out": 15.30, "zoom": 1.45, "center": [0.5, 0.4], "label": "3 new idea, punch-in"}
   ]
 }
 ```
-- `zoom`: scale of the source (1.0 = fit); `center`: source point (0–1) to centre (clamped so no black edge shows) and the anchor of the push-in; `zoomTo` + `zoomFrames` (default 60): eased pure scale from `zoom` to `zoomTo` within the cut; `zoomEase: "out"` makes it a fast emphasis punch; `label` is for you.
+- `zoom`: scale of the source (1.0 = fit); `center`: source point (0–1) to centre (clamped so no black edge shows) and the anchor of the push-in; `zoomTo` + `zoomFrames` (default 60): eased pure scale from `zoom` to `zoomTo` within the cut (not the default, see step 3); `zoomEase: "out"` makes it a fast animated punch; `label` is for you.
 - **Handles:** in ~0.08 s before speech; **out = where the last consonant really ends** (the level falls to the clip's noise floor + 4 dB for 60 ms, measured on the envelope) **+ 40 ms**. A fixed +0.12 s after silencedetect's end clips final consonants (s, t, d, r). Don't add more than that: extra tails read as dead air. **Words ending in "s" fade slowly**: whisper/silencedetect put the end too early and the cut swallows the s. Check the envelope after each out on those words and extend to where it falls under ~−55 dB (often +0.1–0.2 s). Only there: extending every cut brings back the dead air. Handles stay inside silence, never in a neighbouring take.
 - **Self-corrections inside a sentence:** keep the last version. Cut in a stop-consonant gap (k/p/t) or a breath, found with `python3 -I <skill>/scripts/envelope.py <wav> <from> <to>`; dips below about −48 dB are safe. Words that glide together can't be split there: end the clip mid-glide and take the next word from the corrected take.
 
