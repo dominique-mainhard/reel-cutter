@@ -1,16 +1,20 @@
 #!/usr/bin/env python3
-"""Turn a cut spec (spec.json, see SKILL.md) into src/data/<slug>.json for the Reel,
+"""Turn a cut spec (spec.json, see SKILL.md) + its captions .srt into src/data/<slug>.json for the Reel,
 and regenerate src/data/index.ts so Remotion registers "<slug>" and "<slug>-base".
 
-Re-running keeps the keys already placed by hand or by other scripts (layers, cutouts, clickVolume, proxies),
+Re-running keeps the keys already placed by hand or by other scripts (layers, cutouts, clickVolume, proxies,
+captionTop, captionShadow, hold),
 so you can re-cut without losing the visuals (but their frames are the OLD ones: see remap_timeline.py).
 Media are served from public/media, a symlink to the video's folder:  ln -sfn "<video folder>" public/media
 
-Usage (from the project root): python3 -I scripts/from_spec.py <spec.json> <slug>
+Usage (from the project root): python3 -I scripts/from_spec.py <spec.json> <slug> [<captions.srt>]
+Without the .srt the reel has no captions. The captions are re-read from the .srt on every run: after a re-cut,
+run make_captions.py again first, or the old cue times no longer match the cut.
 """
 import glob, json, os, re, sys
 
 spec, slug = json.load(open(sys.argv[1])), sys.argv[2]
+srt = open(sys.argv[3], encoding='utf-8').read() if len(sys.argv) > 3 else ''
 assert re.fullmatch(r'[a-zA-Z0-9-]+', slug), 'slug: letters, digits and dashes only (Remotion composition id)'
 fps = spec.get('fps', 30)
 fr = lambda s: int(round(s * fps))
@@ -27,12 +31,28 @@ for c in spec['cuts']:
     cuts.append(cut)
     t += o - i
 
+
+def secs(x):
+    h, m, s = x.replace(',', '.').split(':')
+    return int(h) * 3600 + int(m) * 60 + float(s)
+
+
+caps = []
+for b in re.split(r'\n\s*\n', srt.strip()) if srt.strip() else []:
+    L = b.strip().splitlines()
+    if len(L) >= 3:
+        a, e = [secs(x.strip()) for x in L[1].split('-->')]
+        caps.append({'from': fr(a), 'to': fr(e), 'text': ' '.join(L[2:])})
+
 out_path = f'src/data/{slug}.json'
 old = json.load(open(out_path)) if os.path.exists(out_path) else {}
-out = {'fps': fps, 'width': spec.get('width', 1080), 'height': spec.get('height', 1920), 'durationInFrames': t, 'cuts': cuts}
-for k in ('layers', 'cutouts', 'clickVolume', 'gainDb', 'proxies'):
+out = {'fps': fps, 'width': spec.get('width', 1080), 'height': spec.get('height', 1920), 'durationInFrames': t, 'cuts': cuts,
+       'captions': caps}
+for k in ('layers', 'cutouts', 'clickVolume', 'gainDb', 'proxies', 'captionTop', 'captionShadow', 'hold'):
     if k in old:
         out[k] = old[k]
+if out.get('hold'):  # end hold: a still of the last frame shown after the last cut
+    out['durationInFrames'] = t + out['hold']['frames']
 if 'gainDb' in spec and 'gainDb' not in out:
     out['gainDb'] = spec['gainDb']
 os.makedirs('src/data', exist_ok=True)
@@ -46,4 +66,4 @@ lines += ['export const reels: {id: string; data: ReelData}[] = [']
 lines += [f'  {{id: "{s}", data: r{i} as unknown as ReelData}},' for i, s in enumerate(slugs)]
 lines += ['];', '']
 open('src/data/index.ts', 'w').write('\n'.join(lines))
-print(f'{len(cuts)} cuts, {t} frames ({t / fps:.1f} s) -> {out_path}; kept: ' + ', '.join(k for k in ('layers', 'cutouts') if k in out))
+print(f'{len(cuts)} cuts, {len(caps)} captions, {t} frames ({t / fps:.1f} s) -> {out_path}; kept: ' + ', '.join(k for k in ('layers', 'cutouts') if k in out))

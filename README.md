@@ -4,11 +4,13 @@ A [Claude Code](https://claude.com/claude-code) skill that cuts raw talking-head
 
 - keeps the **last take** of every line and drops false starts and self-corrections
 - removes **silences** between lines and the **pauses and breaths inside each take**, with handles that don't clip final consonants, and checks every join by ear
+- writes **word-exact captions** (3–4 words per cue, grouped by meaning, below the chin) plus an `.srt`, and has an **independent subagent** check them against the audio before any draft
 - adds **punch-in zooms** at changes of idea (sparingly), plus an instant **jump zoom** (~+10%, then back) on the key line
-- finds **real images and screenshots** for what the speaker mentions (their own captures, official logos and product pages, highlighted captures of cited articles) and places them as a collage behind the speaker's head, each with a **click** sound
+- finds **real images and screenshots** for what the speaker mentions (their own captures, official logos and product pages, highlighted captures of cited articles) and places them as a collage behind the speaker's head, each with a **click** sound; product shots and a small picture-in-picture of the speaker can be cut out to float
 - evens out the audio cut by cut and masters it to −16 LUFS
+- runs a **QA gate** before every draft, and after the first full draft renders **only the corrected spots** (lighter on the laptop)
 
-It does not add captions, big animated text or transitions.
+It does not add big animated text or transitions.
 
 ## Install
 

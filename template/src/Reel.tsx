@@ -1,5 +1,6 @@
 // Talking-head reel, 1080×1920. Everything is driven by src/data/<slug>.json (see the ReelData type).
-// Paint order, back to front: footage cuts → visual layers (screenshots, recordings, images) → speaker cutout → front layers.
+// Paint order, back to front: footage cuts → end hold → visual layers (screenshots, recordings, images) → speaker cutout
+// → front layers → captions.
 // The speaker cutout (alpha .mov of the person, made from the "<slug>-base" plate by scripts/cutouts.py) is what
 // puts the visuals BEHIND the head.
 import React from "react";
@@ -14,18 +15,36 @@ const videoFile = (src: string) =>
 // zoom/center: base framing of the cut. zoomTo/zoomFrames: a subtle push-in WITHIN the cut (zoom -> zoomTo, eased).
 // zoomEase "out": a fast emphasis punch instead of a slow push-in.
 export type Cut = {src: string; from: number; dur: number; srcIn: number; zoom: number; zoomTo?: number; zoomFrames?: number; zoomEase?: "inOut" | "out"; center: [number, number]; gainDb?: number};
-type Box = {left: number; top: number; width: number; height: number; objectPosition?: string};
+type Box = {left: number; top: number; width: number; height: number; objectPosition?: string; rotate?: number}; // rotate: degrees (scattered cutouts)
 export type Crop = {x: number; y: number; w: number; h: number};
 // front: drawn OVER the person (no cutout needed). anim "none": cuts in/out raw (memes, jokes). click: override the sound.
+// drift: px of slow float (cutout products floating), each layer out of phase.
 export type Layer = {kind: "image" | "video"; src: string; from: number; dur: number; box: Box; crop?: Crop;
-  look?: "collage" | "card" | "plain"; anim?: "pop" | "none"; click?: "main" | "soft" | "none"; front?: boolean};
+  look?: "collage" | "card" | "plain"; anim?: "pop" | "none"; click?: "main" | "soft" | "none"; front?: boolean; drift?: number};
+export type CaptionCue = {from: number; to: number; text: string; top?: number /* per-cue override, e.g. a laptop fills the lower half */};
 export type ReelData = {
   fps: number; width: number; height: number; durationInFrames: number;
   cuts: Cut[]; layers?: Layer[]; cutouts?: {src: string; from: number; dur: number}[];
   gainDb?: number; proxies?: boolean; clickVolume?: number;
+  captions?: CaptionCue[]; captionTop?: number; captionShadow?: string; // captionTop: y of the caption line, below the chin
+  hold?: {src: string; frames: number}; // a still shown after the last cut (the last word lands at the end of the source)
 };
 
 const CLICK_VOLUME = 0.5; // noticeable but discreet next to a −16 LUFS voice; 0.2 is inaudible
+
+// ---- caption style (change here) ----
+// One size ALWAYS (changing sizes from cue to cue looks inconsistent): a long cue wraps to a second line inside
+// SAFE_W instead of shrinking. White with a soft shadow, BELOW THE CHIN (data.captionTop, default 1240).
+const FONT = "Helvetica Neue, Helvetica, Arial, sans-serif";
+const SAFE_W = 860; // platforms crop ~50–70 px per side and put buttons on the right
+const CAPTION: React.CSSProperties = {
+  position: "absolute", left: (1080 - SAFE_W) / 2, width: SAFE_W, top: 1240, textAlign: "center", whiteSpace: "normal", textWrap: "balance" as any,
+  fontFamily: FONT, fontWeight: 400, fontSize: 56, lineHeight: 1.15, color: "#fff",
+  textShadow: "0 0 6px rgba(0,0,0,.55), 0 3px 10px rgba(0,0,0,.45), 0 0 2px rgba(0,0,0,.8)",
+};
+const Caption: React.FC<{text: string; top?: number; shadow?: string}> = ({text, top, shadow}) => (
+  <div style={{...CAPTION, top: top ?? CAPTION.top, ...(shadow ? {textShadow: shadow} : {})}}>{text}</div>
+);
 
 // Clicks when visuals appear (scripts/make_click.sh): sfx/click.wav = a real mouse click, for a visual that appears
 // on its own; sfx/click-soft.wav = a subtler click, the SAME one for every item of a run (3+ visuals each within 2 s
@@ -91,6 +110,11 @@ const Pop: React.FC<{dur: number; children: React.ReactNode}> = ({dur, children}
   return <AbsoluteFill style={{opacity: Math.min(inP, fadeOut(f, dur)), transform: `scale(${scale})`, transformOrigin: "50% 25%"}}>{children}</AbsoluteFill>;
 };
 const Raw: React.FC<{dur: number; children: React.ReactNode}> = ({children}) => <AbsoluteFill>{children}</AbsoluteFill>;
+const Drift: React.FC<{amp?: number; seed: number; children: React.ReactNode}> = ({amp, seed, children}) => {
+  const f = useCurrentFrame();
+  if (!amp) return <>{children}</>;
+  return <AbsoluteFill style={{transform: `translateY(${(Math.sin(f / 18 + seed) * amp).toFixed(2)}px) rotate(${(Math.sin(f / 27 + seed * 2) * 1.2).toFixed(2)}deg)`}}>{children}</AbsoluteFill>;
+};
 
 const LayerView: React.FC<{l: Layer}> = ({l}) => {
   const Wrap = l.anim === "none" ? Raw : Pop;
@@ -100,11 +124,12 @@ const LayerView: React.FC<{l: Layer}> = ({l}) => {
     ? {position: "absolute", width: box.width / crop.w, height: box.height / crop.h, left: -crop.x * box.width / crop.w, top: -crop.y * box.height / crop.h, objectFit: "fill"}
     : {width: "100%", height: "100%", objectFit: "cover", objectPosition: box.objectPosition ?? "50% 0%"};
   return (
-    <Wrap dur={l.dur}>
-      <div style={{...(l.look === "card" ? CARD : l.look === "plain" ? PLAIN : COLLAGE), left: box.left, top: box.top, width: box.width, height: box.height}}>
-        {l.kind === "video" ? <OffthreadVideo src={videoFile(l.src)} muted style={style} /> : <Img src={staticFile(l.src)} style={style} />}
+    <Wrap dur={l.dur}><Drift amp={l.drift} seed={l.from % 7}>
+      <div style={{...(l.look === "card" ? CARD : l.look === "plain" ? PLAIN : COLLAGE), left: box.left, top: box.top, width: box.width, height: box.height,
+        ...(box.rotate ? {transform: `rotate(${box.rotate}deg)`} : {})}}>
+        {l.kind === "video" ? <OffthreadVideo src={videoFile(l.src)} muted transparent={/\.(mov|webm)$/i.test(l.src)} style={style} /> : <Img src={staticFile(l.src)} style={style} />}
       </div>
-    </Wrap>
+    </Drift></Wrap>
   );
 };
 
@@ -121,6 +146,10 @@ export const Reel: React.FC<{data: ReelData}> = ({data}) => {
           <CutClip cut={c} W={W} H={H} gain={Math.pow(10, (c.gainDb ?? data.gainDb ?? 0) / 20)} />
         </Sequence>
       ))}
+      {data.hold ? (
+        <Sequence from={cuts[cuts.length - 1].from + cuts[cuts.length - 1].dur} durationInFrames={data.hold.frames}>
+          <AbsoluteFill><Img src={staticFile(data.hold.src)} style={{width: W, height: H}} /></AbsoluteFill>
+        </Sequence>) : null}
       {layers.map((l, k) => l.front ? null : (
         <Sequence key={`l${k}`} from={l.from} durationInFrames={l.dur} premountFor={30}><LayerView l={l} /></Sequence>
       ))}
@@ -132,6 +161,9 @@ export const Reel: React.FC<{data: ReelData}> = ({data}) => {
       {layers.map((l, k) => l.front ? (
         <Sequence key={`lf${k}`} from={l.from} durationInFrames={l.dur} premountFor={30}><LayerView l={l} /></Sequence>
       ) : null)}
+      {(data.captions ?? []).map((c, k) => (
+        <Sequence key={`c${k}`} from={c.from} durationInFrames={Math.max(1, c.to - c.from)}><Caption text={c.text} top={c.top ?? data.captionTop} shadow={data.captionShadow} /></Sequence>
+      ))}
       {layers.map((l, k) => kinds[k] === "none" ? null : <Click key={`s${k}`} at={l.from} volume={click} soft={kinds[k] === "soft"} />)}
     </AbsoluteFill>
   );
